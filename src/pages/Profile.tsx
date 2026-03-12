@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
 import { 
   LogOut, Package, ShieldCheck, User as UserIcon, Clock, CheckCircle2, XCircle, 
   Edit2, Camera, Phone, Mail, Save, X, ChevronRight, Wallet, MessageSquare
@@ -10,13 +10,13 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'f
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import { Order, UserProfile } from '../types';
-import { formatPrice, cn } from '../utils/utils';
+import { formatPrice, cn, formatDate } from '../utils/utils';
 
 const Profile: React.FC = () => {
   const { user, profile, logout } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'Completed'>('All');
+  const [activeTab, setActiveTab] = useState<'All' | 'Pending' | 'Completed' | 'Rejected'>('All');
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -84,17 +84,20 @@ const Profile: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     
-    const orderId = order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`;
-    const date = order.createdAt?.toDate().toLocaleString('en-US', { 
-      day: 'numeric', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    });
+    const tracking = order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`;
+    const date = formatDate(order.createdAt);
     const amount = formatPrice(order.totalAmount);
-    const method = order.paymentMethod;
     const trx = order.transactionId || 'N/A';
     
-    const message = `Hello Admin, I have completed the transaction for this order. Please verify and complete it.\n\nOrder ID: ${orderId}\nDate: ${date}\nAmount: ${amount}\nPayment: ${method} (Trx: ${trx})`;
+    let message = '';
+    if (order.status === 'Pending') {
+      message = `Hello Admin, I have paid ${amount} for Order ${tracking}. My Trx ID is ${trx}. Please verify and complete it.\n\nOrder ID: ${tracking}\nTotal Amount: ${amount}\nTransaction ID: ${trx}\nDate: ${date}`;
+    } else if (order.status === 'Reject') {
+      message = `Hello Admin, my order ${tracking} was rejected. I paid ${amount} with Trx ID: ${trx}. Could you please check this and let me know the reason or refund status?\n\nOrder ID: ${tracking}\nTotal Amount: ${amount}\nTransaction ID: ${trx}\nDate: ${date}`;
+    }
     
+    if (!message) return;
+
     const whatsappUrl = `https://wa.me/8801887076101?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -125,22 +128,56 @@ const Profile: React.FC = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'Delivered': return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
-      case 'Cancelled': return <XCircle className="w-4 h-4 text-red-500" />;
-      default: return <Clock className="w-4 h-4 text-amber-500" />;
+      case 'Complete':
+      case 'Completed':
+      case 'Delivered':
+        return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+      case 'Reject':
+      case 'Rejected':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+    }
+  };
+
+  const getStatusClass = (status: string) => {
+    switch (status) {
+      case 'Complete':
+      case 'Completed':
+      case 'Delivered':
+        return 'bg-green-50 text-green-700 border-green-100';
+      case 'Reject':
+      case 'Rejected':
+        return 'bg-red-50 text-red-700 border-red-100';
+      default:
+        return 'bg-yellow-50 text-yellow-700 border-yellow-100';
     }
   };
 
   const filteredOrders = orders.filter(order => {
     if (activeTab === 'All') return true;
     if (activeTab === 'Pending') return order.status === 'Pending';
-    if (activeTab === 'Completed') return order.status === 'Delivered';
+    if (activeTab === 'Completed') return order.status === 'Complete' || order.status === 'Delivered';
+    if (activeTab === 'Rejected') return order.status === 'Reject';
     return true;
   });
 
   const totalSpent = orders
-    .filter(order => order.status === 'Delivered')
+    .filter(order => order.status === 'Complete' || order.status === 'Delivered')
     .reduce((sum, order) => sum + order.totalAmount, 0);
+
+  const count = useMotionValue(0);
+  const rounded = useTransform(count, (latest) => Math.round(latest).toLocaleString());
+
+  useEffect(() => {
+    if (!loadingOrders) {
+      const controls = animate(count, totalSpent, { 
+        duration: 2,
+        ease: "easeOut"
+      });
+      return controls.stop;
+    }
+  }, [loadingOrders, totalSpent, count]);
 
   if (!profile) return null;
 
@@ -277,7 +314,9 @@ const Profile: React.FC = () => {
               <Wallet className="w-6 h-6" />
             </div>
             <p className="text-indigo-100 font-bold text-sm uppercase tracking-widest mb-1">Total Spent</p>
-            <h3 className="text-3xl font-black">{formatPrice(totalSpent)}</h3>
+            <h3 className="text-3xl font-black flex items-center">
+              ৳<motion.span>{rounded}</motion.span>
+            </h3>
           </div>
         </div>
 
@@ -286,20 +325,24 @@ const Profile: React.FC = () => {
             <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Order Statistics</p>
             <h3 className="text-2xl font-black text-gray-900">Activity Overview</h3>
           </div>
-          <div className="flex gap-8">
-            <div className="text-center">
-              <p className="text-2xl font-black text-indigo-600">{orders.length}</p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">Total</p>
+            <div className="flex gap-6">
+              <div className="text-center">
+                <p className="text-2xl font-black text-indigo-600">{orders.length}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Total</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-black text-green-500">{orders.filter(o => o.status === 'Complete' || o.status === 'Delivered').length}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Completed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-black text-yellow-500">{orders.filter(o => o.status === 'Pending').length}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Pending</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-black text-red-500">{orders.filter(o => o.status === 'Reject').length}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Rejected</p>
+              </div>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-black text-emerald-500">{orders.filter(o => o.status === 'Delivered').length}</p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">Delivered</p>
-            </div>
-            <div className="text-center">
-              <p className="text-2xl font-black text-amber-500">{orders.filter(o => o.status === 'Pending').length}</p>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">Pending</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -313,13 +356,13 @@ const Profile: React.FC = () => {
             <h2 className="text-2xl font-black text-gray-900">Order History</h2>
           </div>
           
-          <div className="flex bg-gray-50 p-1.5 rounded-2xl">
-            {(['All', 'Pending', 'Completed'] as const).map((tab) => (
+          <div className="flex bg-gray-50 p-1.5 rounded-2xl overflow-x-auto no-scrollbar">
+            {(['All', 'Pending', 'Completed', 'Rejected'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  "px-6 py-2 rounded-xl text-sm font-bold transition-all",
+                  "px-6 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
                   activeTab === tab 
                     ? "bg-white text-indigo-600 shadow-sm" 
                     : "text-gray-500 hover:text-gray-700"
@@ -356,19 +399,15 @@ const Profile: React.FC = () => {
                         <div className="space-y-2">
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-black text-gray-900">{order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`}</span>
-                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${
-                              order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                              order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-100' :
-                              'bg-amber-50 text-amber-700 border-amber-100'
-                            }`}>
+                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${getStatusClass(order.status)}`}>
                               {getStatusIcon(order.status)}
-                              {order.status}
+                              {order.status === 'Complete' || order.status === 'Delivered' ? 'Completed' : order.status === 'Reject' ? 'Rejected' : order.status}
                             </div>
                           </div>
                           <div className="flex items-center gap-4 text-xs text-gray-400 font-medium">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              {formatDate(order.createdAt)}
                             </span>
                             <span className="w-1 h-1 bg-gray-200 rounded-full" />
                             <span>{order.items.length} Items</span>
@@ -382,14 +421,14 @@ const Profile: React.FC = () => {
                         </div>
                       </div>
 
-                      {order.status === 'Pending' && (
+                      {(order.status === 'Pending' || order.status === 'Reject') && (
                         <div className="mt-4 pt-4 border-t border-gray-50">
                           <button
                             onClick={(e) => handleWhatsAppSupport(e, order)}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#128C7E] transition-all shadow-sm hover:shadow-md"
                           >
                             <MessageSquare className="w-4 h-4" />
-                            Get Support / Get Product Fast
+                            {order.status === 'Pending' ? 'Get Product Fast' : 'Why Reject/ Refund'}
                           </button>
                         </div>
                       )}

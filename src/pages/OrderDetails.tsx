@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Order } from '../types';
-import { formatPrice } from '../utils/utils';
+import { formatPrice, formatDate } from '../utils/utils';
 import { motion } from 'framer-motion';
 import { 
   Package, 
@@ -55,7 +55,7 @@ const OrderDetails: React.FC = () => {
 
     const doc = new jsPDF();
     const tracking = order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`;
-    const date = order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) || 'N/A';
+    const date = formatDate(order.createdAt);
 
     // Header
     doc.setFontSize(22);
@@ -132,27 +132,47 @@ const OrderDetails: React.FC = () => {
     
     const tracking = order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`;
     const amount = formatPrice(order.totalAmount);
-    const products = order.items.map(i => i.title).join(', ');
+    const trx = order.transactionId || 'N/A';
+    const dateTime = formatDate(order.createdAt);
     
-    const message = `Hello Admin, I have paid for this order. Here are my details. Please verify and complete the order.\n\nTracking ID: ${tracking}\nCustomer: ${order.customerName} (${order.customerGmail})\nPayment: ${order.paymentMethod} (Trx: ${order.transactionId || 'N/A'})\nTotal: ${amount}\nProducts: ${products}`;
+    let message = '';
+    if (order.status === 'Pending') {
+      message = `Hello Admin, I have paid ${amount} for Order ${tracking}. My Trx ID is ${trx}. Please verify and complete it.\n\nOrder ID: ${tracking}\nTotal Amount: ${amount}\nTransaction ID: ${trx}\nDate: ${dateTime}`;
+    } else if (order.status === 'Reject') {
+      message = `Hello Admin, my order ${tracking} was rejected. I paid ${amount} with Trx ID: ${trx}. Could you please check this and let me know the reason or refund status?\n\nOrder ID: ${tracking}\nTotal Amount: ${amount}\nTransaction ID: ${trx}\nDate: ${dateTime}`;
+    }
     
+    if (!message) return;
+
     const whatsappUrl = `https://wa.me/8801887076101?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'Delivered': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-      case 'Cancelled': return <XCircle className="w-5 h-5 text-red-500" />;
-      default: return <Clock className="w-5 h-5 text-amber-500" />;
+      case 'Complete':
+      case 'Completed':
+      case 'Delivered':
+        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case 'Reject':
+      case 'Rejected':
+        return <XCircle className="w-5 h-5 text-red-500" />;
+      default:
+        return <Clock className="w-5 h-5 text-yellow-500" />;
     }
   };
 
   const getStatusClass = (status: string) => {
     switch (status) {
-      case 'Delivered': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'Cancelled': return 'bg-red-50 text-red-700 border-red-100';
-      default: return 'bg-amber-50 text-amber-700 border-amber-100';
+      case 'Complete':
+      case 'Completed':
+      case 'Delivered':
+        return 'bg-green-50 text-green-700 border-green-100';
+      case 'Reject':
+      case 'Rejected':
+        return 'bg-red-50 text-red-700 border-red-100';
+      default:
+        return 'bg-yellow-50 text-yellow-700 border-yellow-100';
     }
   };
 
@@ -206,13 +226,13 @@ const OrderDetails: React.FC = () => {
             <Download className="w-5 h-5" />
             Download Invoice
           </button>
-          {order.status === 'Pending' && (
+          {(order.status === 'Pending' || order.status === 'Reject') && (
             <button 
               onClick={handleWhatsAppSupport}
               className="flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white rounded-xl font-bold hover:bg-[#128C7E] transition-all shadow-lg shadow-green-100"
             >
               <MessageSquare className="w-5 h-5" />
-              Get Support
+              {order.status === 'Pending' ? 'Get Product Fast' : 'Why Reject/ Refund'}
             </button>
           )}
         </div>
@@ -240,10 +260,10 @@ const OrderDetails: React.FC = () => {
             <div className="text-right">
               <div className={`px-4 py-2 rounded-xl border inline-flex items-center gap-2 font-bold text-sm mb-2 ${getStatusClass(order.status)}`}>
                 {getStatusIcon(order.status)}
-                {order.status}
+                {order.status === 'Complete' || order.status === 'Delivered' ? 'Completed' : order.status === 'Reject' ? 'Rejected' : order.status}
               </div>
               <p className="text-sm text-gray-400 font-bold">
-                {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {formatDate(order.createdAt)}
               </p>
             </div>
           </div>

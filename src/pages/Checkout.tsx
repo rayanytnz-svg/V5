@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatPrice, generateTrackingNumber } from '../utils/utils';
-import { Copy, Check, ArrowLeft, Wallet, CreditCard, ShoppingBag, CheckCircle2 } from 'lucide-react';
+import { Copy, Check, ArrowLeft, Wallet, CreditCard, ShoppingBag, CheckCircle2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot, collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -231,6 +231,10 @@ const Checkout: React.FC = () => {
                 className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 transition-all font-medium"
                 placeholder="example@gmail.com"
               />
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                <Info className="w-3.5 h-3.5 text-indigo-400" />
+                Double-check! Your product access details will be delivered to this email address.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Phone Number</label>

@@ -37,24 +37,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profileRef = doc(db, 'users', firebaseUser.uid);
         
         // Use onSnapshot for real-time profile updates
-        unsubscribeProfile = onSnapshot(profileRef, async (docSnap) => {
+        unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
           if (docSnap.exists()) {
             setProfile(docSnap.data() as UserProfile);
+            setLoading(false);
           } else {
-            // Create new profile if it doesn't exist
-            const isAdminEmail = firebaseUser.email === 'admin@piximart.com';
-            const newProfile: UserProfile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || 'User',
-              photoURL: firebaseUser.photoURL || '',
-              role: isAdminEmail ? 'admin' : 'user',
-              createdAt: serverTimestamp() as any,
-            };
-            await setDoc(profileRef, newProfile);
-            // setProfile will be called by the next snapshot
+            // If the user is logged in but has no profile, they might have been deleted
+            // We sign them out to ensure they can't access the app
+            signOut(auth);
+            setProfile(null);
+            setLoading(false);
           }
-          setLoading(false);
         }, (error) => {
           console.error("Profile snapshot error:", error);
           setLoading(false);
@@ -78,9 +71,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, pass: string, name: string) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(userCredential.user, { displayName: name });
+    const firebaseUser = userCredential.user;
     
-    // Profile creation is handled in onAuthStateChanged listener
+    // Create profile immediately upon registration
+    const profileRef = doc(db, 'users', firebaseUser.uid);
+    const isAdminEmail = email === 'admin@piximart.com';
+    const newProfile: UserProfile = {
+      uid: firebaseUser.uid,
+      email: email,
+      displayName: name,
+      photoURL: '',
+      role: isAdminEmail ? 'admin' : 'user',
+      createdAt: serverTimestamp() as any,
+      totalSpent: 0
+    };
+    
+    await setDoc(profileRef, newProfile);
+    await updateProfile(firebaseUser, { displayName: name });
   };
 
   const logout = async () => {

@@ -64,6 +64,7 @@ export interface UserProfile {
   photoURL: string;
   phoneNumber?: string;
   role: 'admin' | 'user';
+  totalSpent?: number;
   createdAt: Timestamp;
 }
 
@@ -77,7 +78,7 @@ export interface Order {
   totalAmount: number;
   paymentMethod: string;
   transactionId: string;
-  status: 'Pending' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Complete' | 'Reject';
   items: {
     productId: string;
     title: string;

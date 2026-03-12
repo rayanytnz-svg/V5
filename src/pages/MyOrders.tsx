@@ -3,7 +3,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Order } from '../types';
-import { formatPrice } from '../utils/utils';
+import { formatPrice, formatDate } from '../utils/utils';
 import { motion } from 'framer-motion';
 import { 
   Package, 
@@ -11,7 +11,8 @@ import {
   CheckCircle2, 
   XCircle, 
   ArrowLeft, 
-  ExternalLink
+  ExternalLink,
+  MessageSquare
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -51,18 +52,52 @@ const MyOrders: React.FC = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'Delivered': return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
-      case 'Cancelled': return <XCircle className="w-5 h-5 text-red-500" />;
-      default: return <Clock className="w-5 h-5 text-amber-500" />;
+      case 'Complete':
+      case 'Completed':
+      case 'Delivered':
+        return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case 'Reject':
+      case 'Rejected':
+        return <XCircle className="w-5 h-5 text-red-500" />;
+      default:
+        return <Clock className="w-5 h-5 text-yellow-500" />;
     }
   };
 
   const getStatusClass = (status: string) => {
     switch (status) {
-      case 'Delivered': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'Cancelled': return 'bg-red-50 text-red-700 border-red-100';
-      default: return 'bg-amber-50 text-amber-700 border-amber-100';
+      case 'Complete':
+      case 'Completed':
+      case 'Delivered':
+        return 'bg-green-50 text-green-700 border-green-100';
+      case 'Reject':
+      case 'Rejected':
+        return 'bg-red-50 text-red-700 border-red-100';
+      default:
+        return 'bg-yellow-50 text-yellow-700 border-yellow-100';
     }
+  };
+
+  const handleWhatsAppSupport = (e: React.MouseEvent, order: Order) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const tracking = order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`;
+    const date = formatDate(order.createdAt);
+    const amount = formatPrice(order.totalAmount);
+    const trx = order.transactionId || 'N/A';
+    
+    let message = '';
+    if (order.status === 'Pending') {
+      message = `Hello Admin, I have paid ${amount} for Order ${tracking}. My Trx ID is ${trx}. Please verify and complete it.\n\nOrder ID: ${tracking}\nTotal Amount: ${amount}\nTransaction ID: ${trx}\nDate: ${date}`;
+    } else if (order.status === 'Reject') {
+      message = `Hello Admin, my order ${tracking} was rejected. I paid ${amount} with Trx ID: ${trx}. Could you please check this and let me know the reason or refund status?\n\nOrder ID: ${tracking}\nTotal Amount: ${amount}\nTransaction ID: ${trx}\nDate: ${date}`;
+    }
+    
+    if (!message) return;
+
+    const whatsappUrl = `https://wa.me/8801887076101?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   if (loading) {
@@ -115,7 +150,7 @@ const MyOrders: React.FC = () => {
                     <div className="flex items-center gap-3">
                       <div className={`px-4 py-2 rounded-xl border flex items-center gap-2 font-bold text-sm ${getStatusClass(order.status)}`}>
                         {getStatusIcon(order.status)}
-                        {order.status}
+                        {order.status === 'Complete' || order.status === 'Delivered' ? 'Completed' : order.status === 'Reject' ? 'Rejected' : order.status}
                       </div>
                       <div className="p-2 bg-gray-50 text-gray-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 rounded-xl transition-all">
                         <ExternalLink className="w-5 h-5" />
@@ -153,7 +188,7 @@ const MyOrders: React.FC = () => {
                       <div>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</p>
                         <p className="text-sm font-bold text-gray-600">
-                          {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {formatDate(order.createdAt)}
                         </p>
                       </div>
                       <div>
@@ -171,6 +206,18 @@ const MyOrders: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {(order.status === 'Pending' || order.status === 'Reject') && (
+                    <div className="mt-6 pt-6 border-t border-gray-100">
+                      <button
+                        onClick={(e) => handleWhatsAppSupport(e, order)}
+                        className="flex items-center gap-2 px-6 py-3 bg-[#25D366] text-white rounded-xl font-bold hover:bg-[#128C7E] transition-all shadow-lg shadow-green-100"
+                      >
+                        <MessageSquare className="w-5 h-5" />
+                        {order.status === 'Pending' ? 'Get Product Fast' : 'Why Reject/ Refund'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             </Link>
