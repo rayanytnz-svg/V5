@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LogOut, Package, ShieldCheck, User as UserIcon, Clock, CheckCircle2, XCircle, 
-  Edit2, Camera, Phone, Mail, Save, X, ChevronRight, Wallet
+  Edit2, Camera, Phone, Mail, Save, X, ChevronRight, Wallet, MessageSquare
 } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -78,6 +78,25 @@ const Profile: React.FC = () => {
     } catch (error) {
       console.error("Error updating profile:", error);
     }
+  };
+
+  const handleWhatsAppSupport = (e: React.MouseEvent, order: Order) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const orderId = order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`;
+    const date = order.createdAt?.toDate().toLocaleString('en-US', { 
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+    const amount = formatPrice(order.totalAmount);
+    const method = order.paymentMethod;
+    const trx = order.transactionId || 'N/A';
+    
+    const message = `Hello Admin, I have completed the transaction for this order. Please verify and complete it.\n\nOrder ID: ${orderId}\nDate: ${date}\nAmount: ${amount}\nPayment: ${method} (Trx: ${trx})`;
+    
+    const whatsappUrl = `https://wa.me/8801887076101?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,44 +340,61 @@ const Profile: React.FC = () => {
             <div className="space-y-4">
               <AnimatePresence mode="popLayout">
                 {filteredOrders.map((order) => (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    key={order.id}
-                    className="p-6 rounded-3xl border border-gray-100 hover:border-indigo-100 hover:shadow-md transition-all group"
+                  <Link 
+                    key={order.id} 
+                    to={`/order-details/${order.id}`}
+                    className="block group"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-black text-gray-900">{order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`}</span>
-                          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${
-                            order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                            order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-100' :
-                            'bg-amber-50 text-amber-700 border-amber-100'
-                          }`}>
-                            {getStatusIcon(order.status)}
-                            {order.status}
+                    <motion.div
+                      layout
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="p-6 rounded-3xl border border-gray-100 hover:border-indigo-100 hover:bg-gray-50 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-black text-gray-900">{order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`}</span>
+                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold border ${
+                              order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                              order.status === 'Cancelled' ? 'bg-red-50 text-red-700 border-red-100' :
+                              'bg-amber-50 text-amber-700 border-amber-100'
+                            }`}>
+                              {getStatusIcon(order.status)}
+                              {order.status}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-gray-400 font-medium">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                            <span className="w-1 h-1 bg-gray-200 rounded-full" />
+                            <span>{order.items.length} Items</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-gray-400 font-medium">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </span>
-                          <span className="w-1 h-1 bg-gray-200 rounded-full" />
-                          <span>{order.items.length} Items</span>
+                        <div className="text-right">
+                          <p className="text-xl font-black text-indigo-600 group-hover:scale-110 transition-transform origin-right">
+                            {formatPrice(order.totalAmount)}
+                          </p>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{order.paymentMethod}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xl font-black text-indigo-600 group-hover:scale-110 transition-transform origin-right">
-                          {formatPrice(order.totalAmount)}
-                        </p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{order.paymentMethod}</p>
-                      </div>
-                    </div>
-                  </motion.div>
+
+                      {order.status === 'Pending' && (
+                        <div className="mt-4 pt-4 border-t border-gray-50">
+                          <button
+                            onClick={(e) => handleWhatsAppSupport(e, order)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-[#25D366] text-white rounded-xl text-xs font-bold hover:bg-[#128C7E] transition-all shadow-sm hover:shadow-md"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Get Support / Get Product Fast
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
+                  </Link>
                 ))}
               </AnimatePresence>
             </div>

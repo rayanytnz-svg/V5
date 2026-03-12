@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { Order } from '../types';
 import { formatPrice } from '../utils/utils';
 import { motion } from 'framer-motion';
-import { Package, Clock, CheckCircle2, XCircle, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { 
+  Package, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  ArrowLeft, 
+  ExternalLink
+} from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 
 const MyOrders: React.FC = () => {
   const { user } = useAuth();
@@ -89,64 +96,84 @@ const MyOrders: React.FC = () => {
       {orders.length > 0 ? (
         <div className="space-y-6">
           {orders.map((order) => (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              key={order.id}
-              className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden"
+            <Link 
+              to={`/order-details/${order.id}`} 
+              key={order.id} 
+              className="block group"
             >
-              <div className="p-6 md:p-8">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-                  <div>
-                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Tracking Number</p>
-                    <p className="font-bold text-gray-900">{order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`}</p>
-                  </div>
-                  <div className={`px-4 py-2 rounded-xl border flex items-center gap-2 font-bold text-sm ${getStatusClass(order.status)}`}>
-                    {getStatusIcon(order.status)}
-                    {order.status}
-                  </div>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
-                          <Package className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-gray-900">{item.title}</p>
-                          <p className="text-xs text-gray-500 font-medium">
-                            {item.quantity} x {formatPrice(item.price)}
-                            {item.variantName && ` • ${item.variantName}`}
-                          </p>
-                        </div>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer"
+              >
+                <div className="p-6 md:p-8">
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                    <div>
+                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Tracking Number</p>
+                      <p className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{order.trackingNumber || `#${order.id.slice(-8).toUpperCase()}`}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className={`px-4 py-2 rounded-xl border flex items-center gap-2 font-bold text-sm ${getStatusClass(order.status)}`}>
+                        {getStatusIcon(order.status)}
+                        {order.status}
                       </div>
-                      <p className="font-bold text-gray-900">{formatPrice(item.price * item.quantity)}</p>
+                      <div className="p-2 bg-gray-50 text-gray-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 rounded-xl transition-all">
+                        <ExternalLink className="w-5 h-5" />
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                <div className="pt-6 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-6">
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</p>
-                      <p className="text-sm font-bold text-gray-600">
-                        {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  <div className="space-y-4 mb-8">
+                    {order.items.slice(0, 2).map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">
+                            <Package className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900">{item.title}</p>
+                            <p className="text-xs text-gray-500 font-medium">
+                              {item.quantity} x {formatPrice(item.price)}
+                              {item.variantName && ` • ${item.variantName}`}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="font-bold text-gray-900">{formatPrice(item.price * item.quantity)}</p>
+                      </div>
+                    ))}
+                    {order.items.length > 2 && (
+                      <p className="text-sm text-gray-400 font-bold ml-16">
+                        + {order.items.length - 2} more items
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Payment</p>
-                      <p className="text-sm font-bold text-gray-600">{order.paymentMethod}</p>
-                    </div>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Amount</p>
-                    <p className="text-2xl font-black text-indigo-600">{formatPrice(order.totalAmount)}</p>
+
+                  <div className="pt-6 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-6">
+                      <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Date</p>
+                        <p className="text-sm font-bold text-gray-600">
+                          {order.createdAt?.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Payment</p>
+                        <p className="text-sm font-bold text-gray-600">{order.paymentMethod}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Amount</p>
+                        <p className="text-2xl font-black text-indigo-600">{formatPrice(order.totalAmount)}</p>
+                      </div>
+                      <div className="bg-indigo-50 text-indigo-600 px-6 py-2 rounded-xl font-bold text-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                        View Details
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            </Link>
           ))}
         </div>
       ) : (
@@ -169,3 +196,4 @@ const MyOrders: React.FC = () => {
 };
 
 export default MyOrders;
+
